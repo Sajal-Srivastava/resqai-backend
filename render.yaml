@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: resqai-backend
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    plan: free
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: FLASK_ENV
+        value: production
+      - key: FLASK_DEBUG
+        value: "false"
+      - key: ALLOWED_ORIGINS
+        value: https://resqai-frontend.vercel.app,http://localhost:3000
