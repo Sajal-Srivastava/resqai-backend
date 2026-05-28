@@ -2,10 +2,15 @@ import os
 import logging
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from transformers import pipeline
 import google.generativeai as genai
 from dotenv import load_dotenv
-from functools import lru_cache
+
+try:
+    from transformers import pipeline as hf_pipeline
+    _HF_AVAILABLE = True
+except ImportError:
+    _HF_AVAILABLE = False
+    hf_pipeline = None
 
 load_dotenv()
 
@@ -16,9 +21,12 @@ app = Flask(__name__)
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv('ALLOWED_ORIGINS', '*').split(',')]
 CORS(app, resources={r"/api/*": {"origins": ALLOWED_ORIGINS}})
 
-@lru_cache(maxsize=1)
 def get_classifier():
-    return pipeline('sentiment-analysis')
+    if not _HF_AVAILABLE:
+        return None
+    if not hasattr(get_classifier, '_instance'):
+        get_classifier._instance = hf_pipeline('sentiment-analysis')
+    return get_classifier._instance
 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 if GEMINI_API_KEY:
@@ -119,9 +127,13 @@ def classify():
     # 2. Sentiment-based classification as fallback
     try:
         classifier = get_classifier()
-        sentiment = classifier(text[:512])[0]
-        sent_confidence = sentiment['score']
-        sent_type = 'Medical' if sentiment['label'] == 'NEGATIVE' else 'General Distress'
+        if classifier:
+            sentiment = classifier(text[:512])[0]
+            sent_confidence = sentiment['score']
+            sent_type = 'Medical' if sentiment['label'] == 'NEGATIVE' else 'General Distress'
+        else:
+            sent_confidence = 0.6
+            sent_type = 'General Distress'
     except Exception as e:
         logger.error(f"Classifier error: {e}")
         sent_confidence = 0.6
